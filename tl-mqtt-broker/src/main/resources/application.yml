@@ -1,0 +1,6 @@
+
+
+tl:
+  mqtt:
+    broker:
+      brokerId: tl-mqtt-broker
