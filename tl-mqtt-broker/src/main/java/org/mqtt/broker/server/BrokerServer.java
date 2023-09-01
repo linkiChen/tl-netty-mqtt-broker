@@ -15,6 +15,7 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.timeout.IdleStateHandler;
 import org.mqtt.broker.handler.BrokerHandler;
 import org.mqtt.broker.properties.BrokerProperties;
+import org.mqtt.broker.protocal.EventHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -23,6 +24,7 @@ import javax.annotation.PostConstruct;
 import javax.net.ssl.KeyManagerFactory;
 import java.io.InputStream;
 import java.security.KeyStore;
+import java.util.Map;
 
 @Component
 public class BrokerServer {
@@ -36,10 +38,12 @@ public class BrokerServer {
     private EventLoopGroup workerGroup;
 
     private Channel channel;
+    private Map<String, EventHandler> eventHandlerMap;
 
-    public BrokerServer(BrokerProperties properties) {
+    public BrokerServer(BrokerProperties properties, Map<String, EventHandler> ehm) {
         this.brokerProperties = properties;
         logLevel = LOGGER.isDebugEnabled() ? LogLevel.DEBUG : LogLevel.INFO;
+        this.eventHandlerMap = ehm;
     }
 
 
@@ -73,9 +77,9 @@ public class BrokerServer {
                             ChannelPipeline pipeline = socketChannel.pipeline();
                             // 心跳检测
                             pipeline.addFirst("idle", new IdleStateHandler(0, 0, brokerProperties.getSoBackLog()));
-                            pipeline.addLast("decoder",new MqttDecoder());
+                            pipeline.addLast("decoder", new MqttDecoder());
                             pipeline.addLast("encoder", MqttEncoder.INSTANCE);
-                            pipeline.addLast("brokerHandler",new BrokerHandler(/*protocolProcess*/));
+                            pipeline.addLast("brokerHandler", new BrokerHandler(eventHandlerMap));
                         }
                     })
                     .option(ChannelOption.SO_BACKLOG, brokerProperties.getSoBackLog())

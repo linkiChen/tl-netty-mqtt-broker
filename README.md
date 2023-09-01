@@ -1,15 +1,15 @@
-- CONNECT(1),
-- CONNACK(2),
-- PUBLISH(3),
-- PUBACK(4),
-- PUBREC(5),
-- PUBREL(6),
-- PUBCOMP(7),
-- SUBSCRIBE(8),
-- SUBACK(9),
-- UNSUBSCRIBE(10),
-- UNSUBACK(11),
-- PINGREQ(12),
-- PINGRESP(13),
-- DISCONNECT(14),
-- AUTH(15);
+- CONNECT(1): 客户端连接到服务器
+- CONNACK(2): 连接确认
+- PUBLISH(3): 发布消息
+- PUBACK(4): 发布消息确认
+- PUBREC(5): 发布的消息已接收
+- PUBREL(6): 发布的消息已释放
+- PUBCOMP(7): 发布完成
+- SUBSCRIBE(8): 订阅请求
+- SUBACK(9): 订阅确认
+- UNSUBSCRIBE(10): 取消订阅
+- UNSUBACK(11): 取消订阅确认
+- PINGREQ(12): 客户端发送心跳
+- PINGRESP(13): 服务端心跳响应
+- DISCONNECT(14): 断开连接
+- AUTH(15): 认证
