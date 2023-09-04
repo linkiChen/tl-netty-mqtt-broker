@@ -12,6 +12,7 @@
     <modules>
         <module>tl-mqtt-common</module>
         <module>tl-mqtt-broker</module>
+        <module>tl-mqtt-cache</module>
     </modules>
 
     <properties>

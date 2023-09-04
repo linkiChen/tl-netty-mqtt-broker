@@ -47,7 +47,7 @@ public class BrokerHandler extends SimpleChannelInboundHandler<MqttMessage> {
             if (((IdleStateEvent) evt).state() == IdleState.ALL_IDLE) {
                 // clientId属性值是在客户端连接成功的时候存到channel中的
                 String clientId = (String) ctx.channel().attr(AttributeKey.valueOf("clientId")).get();
-
+                // 发送遗嘱消息
             }
         } else {
             super.userEventTriggered(ctx, evt);
