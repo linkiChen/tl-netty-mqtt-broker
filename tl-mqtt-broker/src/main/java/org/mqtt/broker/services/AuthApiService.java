@@ -1,4 +1,4 @@
-package org.mqtt.broker;
+package org.mqtt.broker.services;
 
 public interface AuthApiService {
 
