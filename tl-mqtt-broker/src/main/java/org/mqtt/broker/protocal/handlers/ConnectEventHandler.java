@@ -1,9 +1,14 @@
 package org.mqtt.broker.protocal.handlers;
 
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.mqtt.*;
+import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.util.AttributeKey;
 import io.netty.util.CharsetUtil;
 import org.mqtt.broker.protocal.EventHandler;
+import org.mqtt.cache.api.SessionStoreService;
+import org.mqtt.cache.entities.SessionContent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -18,6 +23,11 @@ import java.util.Objects;
 @Component(value = "connectEventHandler")
 public class ConnectEventHandler implements EventHandler<MqttConnectMessage> {
     private final static Logger LOGGER = LoggerFactory.getLogger(ConnectEventHandler.class);
+    private SessionStoreService sessionStoreService;
+
+    public ConnectEventHandler(SessionStoreService sessionStoreService) {
+        this.sessionStoreService = sessionStoreService;
+    }
 
     /**
      * 是否需要校验客户端
@@ -33,6 +43,26 @@ public class ConnectEventHandler implements EventHandler<MqttConnectMessage> {
         if (!clientAuthAndContinue(channel, msg)) {
             return;
         }
+
+        SessionContent sessionContent = new SessionContent(msg.payload().clientIdentifier(), channel, msg.variableHeader().isCleanSession(), null);
+        // 处理遗嘱信息
+        if (msg.variableHeader().isWillFlag()) {
+            MqttPublishMessage willMessage = (MqttPublishMessage) MqttMessageFactory.newMessage(
+                    new MqttFixedHeader(MqttMessageType.PUBLISH, false, MqttQoS.valueOf(msg.variableHeader().willQos()), msg.variableHeader().isWillRetain(), 0),
+                    new MqttPublishVariableHeader(msg.payload().willTopic(), 0), Unpooled.buffer().writeBytes(msg.payload().willMessageInBytes()));
+            sessionContent.setWillMessage(willMessage);
+        }
+        // 处理连接心跳包
+        if (msg.variableHeader().keepAliveTimeSeconds() > 0) {
+            if (channel.pipeline().names().contains("idle")) {
+                channel.pipeline().remove("idle");
+            }
+            channel.pipeline().addFirst("idle", new IdleStateHandler(0, 0, Math.round(msg.variableHeader().keepAliveTimeSeconds() * 1.5f)));
+        }
+        // 将客户端的连接信息保存到缓存中
+        sessionStoreService.put(sessionContent.getClientId(), sessionContent);
+        // 将客户端clientId存储到channel中
+        channel.attr(AttributeKey.valueOf("clientId")).set(msg.payload().clientIdentifier());
         MqttConnAckMessage okResp = (MqttConnAckMessage) MqttMessageFactory.newMessage(
                 new MqttFixedHeader(MqttMessageType.CONNACK, false, MqttQoS.AT_MOST_ONCE, false, 0),
                 new MqttConnAckVariableHeader(MqttConnectReturnCode.CONNECTION_ACCEPTED, true), null);

@@ -1,9 +1,9 @@
 package org.mqtt.cache.entities;
 
+import io.netty.channel.Channel;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
 
 import java.io.Serializable;
-import java.nio.channels.Channel;
 
 /**
  * 会话信息
@@ -61,5 +61,15 @@ public class SessionContent implements Serializable {
 
     public void setWillMessage(MqttPublishMessage willMessage) {
         this.willMessage = willMessage;
+    }
+
+    @Override
+    public String toString() {
+        return "SessionContent{" +
+                "clientId='" + clientId + '\'' +
+                ", channel=" + channel +
+                ", cleanSession=" + cleanSession +
+                ", willMessage=" + willMessage +
+                '}';
     }
 }

@@ -44,4 +44,13 @@ public class SubscribeContent implements Serializable {
     public void setMqttQos(int mqttQos) {
         this.mqttQos = mqttQos;
     }
+
+    @Override
+    public String toString() {
+        return "SubscribeContent{" +
+                "clientId='" + clientId + '\'' +
+                ", topicFilter='" + topicFilter + '\'' +
+                ", mqttQos=" + mqttQos +
+                '}';
+    }
 }

@@ -14,6 +14,25 @@ public class TopicMatcherTest {
 
     @Test
     public void matchTest() {
+        String topicFilter = "a/b/c";
+        String topic = "a/b/c";
+        System.out.println(matcher.match(topicFilter, topic));
 
+        topicFilter = "a/b/d";
+        System.out.println(matcher.match(topicFilter, topic));
+
+        topicFilter = "a/b/#";
+        System.out.println(matcher.match(topicFilter, topic));
+
+        topicFilter = "a/b/+";
+        System.out.println(matcher.match(topicFilter, topic));
+
+        topicFilter = "a/+/c";
+        System.out.println(matcher.match(topicFilter, topic));
+
+        topicFilter = "+/b/c";
+        System.out.println(matcher.match(topicFilter, topic));
+
+        System.out.println(matcher.match("a/b/#", "a/b/c/d/e"));
     }
 }

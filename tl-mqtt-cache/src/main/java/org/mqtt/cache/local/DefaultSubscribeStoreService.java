@@ -3,9 +3,11 @@ package org.mqtt.cache.local;
 import org.apache.commons.lang3.StringUtils;
 import org.mqtt.cache.api.SubscribeStoreService;
 import org.mqtt.cache.entities.SubscribeContent;
+import org.mqtt.common.matcher.TopicMatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,6 +19,12 @@ public class DefaultSubscribeStoreService implements SubscribeStoreService {
 
     private Map<String/*topicFilter*/, ConcurrentHashMap<String/*clientId*/, SubscribeContent>> wildCardCache = new ConcurrentHashMap();
     private Map<String/*topicFilter*/, ConcurrentHashMap<String/*clientId*/, SubscribeContent>> notWildCardCache = new ConcurrentHashMap();
+
+    private TopicMatcher topicMatcher;
+
+    public DefaultSubscribeStoreService(TopicMatcher topicMatcher) {
+        this.topicMatcher = topicMatcher;
+    }
 
     @Override
     public void put(String topicFilter, SubscribeContent subscribe) {
@@ -48,12 +56,37 @@ public class DefaultSubscribeStoreService implements SubscribeStoreService {
 
     @Override
     public void remoteByClient(String clientId) {
+        wildCardCache.forEach((topicFilter, subMap) -> {
+            if (subMap.containsKey(clientId)) {
+                subMap.remove(clientId);
+            }
+            if (subMap.isEmpty()) {
+                wildCardCache.remove(topicFilter);
+            }
+        });
+
+        notWildCardCache.forEach((topicFilter, subMap) -> {
+            if (subMap.containsKey(clientId)) {
+                subMap.remove(clientId);
+            }
+            if (subMap.isEmpty()) {
+                notWildCardCache.remove(topicFilter);
+            }
+        });
     }
 
     @Override
     public List<SubscribeContent> search(String topic) {
-        ConcurrentHashMap<String, SubscribeContent> resultMap = notWildCardCache.getOrDefault(topic, new ConcurrentHashMap<>());
+        List<SubscribeContent> resultList = new ArrayList<>();
+        if (notWildCardCache.containsKey(topic)) {
+            resultList.addAll(notWildCardCache.get(topic).values().stream().collect(Collectors.toList()));
+        }
 
-        return null;
+        wildCardCache.forEach((topicFilter, subMap) -> {
+            if (topicMatcher.match(topicFilter, topic)) {
+                resultList.addAll(wildCardCache.get(topicFilter).values().stream().collect(Collectors.toList()));
+            }
+        });
+        return resultList;
     }
 }
