@@ -1,9 +1,7 @@
 package org.mqtt.cache.config;
 
-import org.mqtt.cache.api.SessionStoreService;
-import org.mqtt.cache.api.SubscribeStoreService;
-import org.mqtt.cache.local.DefaultSessionStoreService;
-import org.mqtt.cache.local.DefaultSubscribeStoreService;
+import org.mqtt.cache.api.*;
+import org.mqtt.cache.local.*;
 import org.mqtt.common.matcher.TopicMatcher;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -29,4 +27,29 @@ public class CacheConfig {
     public TopicMatcher topicMatcher() {
         return new TopicMatcher();
     }
+
+    @Bean
+    @ConditionalOnMissingBean(MessageIdService.class)
+    public MessageIdService messageIdService() {
+        return new DefaultMessageIdService();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(DupPublishMessageService.class)
+    public DupPublishMessageService dupPublishMessageService(MessageIdService messageIdService) {
+        return new DefaultDupPublishMessageService(messageIdService);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(DupPubRelMessageService.class)
+    public DupPubRelMessageService dupPubRelMessageService(MessageIdService messageIdService) {
+        return new DefaultDupPubRelMessageService(messageIdService);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(RetainMessageStoreService.class)
+    public RetainMessageStoreService retainMessageStoreService(TopicMatcher topicMatcher) {
+        return new DefaultRetainMessageStoreService(topicMatcher);
+    }
+
 }

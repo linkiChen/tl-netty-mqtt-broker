@@ -5,9 +5,13 @@ import io.netty.channel.Channel;
 import io.netty.handler.codec.mqtt.*;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.AttributeKey;
-import io.netty.util.CharsetUtil;
 import org.mqtt.broker.protocal.EventHandler;
+import org.mqtt.cache.api.DupPubRelMessageService;
+import org.mqtt.cache.api.DupPublishMessageService;
 import org.mqtt.cache.api.SessionStoreService;
+import org.mqtt.cache.api.SubscribeStoreService;
+import org.mqtt.cache.entities.DupPubRelMessageContent;
+import org.mqtt.cache.entities.DupPublishMessageContent;
 import org.mqtt.cache.entities.SessionContent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -24,15 +29,24 @@ import java.util.Objects;
 public class ConnectEventHandler implements EventHandler<MqttConnectMessage> {
     private final static Logger LOGGER = LoggerFactory.getLogger(ConnectEventHandler.class);
     private SessionStoreService sessionStoreService;
+    private SubscribeStoreService subscribeStoreService;
+    private DupPublishMessageService dupPublishMessageService;
+    private DupPubRelMessageService dupPubRelMessageService;
 
-    public ConnectEventHandler(SessionStoreService sessionStoreService) {
+    public ConnectEventHandler(SessionStoreService sessionStoreService,
+                               SubscribeStoreService subscribeStoreService,
+                               DupPublishMessageService dupPublishMessageService,
+                               DupPubRelMessageService dupPubRelMessageService) {
         this.sessionStoreService = sessionStoreService;
+        this.subscribeStoreService = subscribeStoreService;
+        this.dupPublishMessageService = dupPublishMessageService;
+        this.dupPubRelMessageService = dupPubRelMessageService;
     }
 
     /**
      * 是否需要校验客户端
      */
-    private boolean needAuth = true;
+    private boolean needAuth = false;
 
     @Override
     public void eventProcess(Channel channel, MqttConnectMessage msg) {
@@ -42,6 +56,20 @@ public class ConnectEventHandler implements EventHandler<MqttConnectMessage> {
         }
         if (!clientAuthAndContinue(channel, msg)) {
             return;
+        }
+
+        // 如果会话中已存储这个新连接的clientId, 就关闭之前该clientId的连接
+        if (sessionStoreService.containsClientId(msg.payload().clientIdentifier())) {
+            SessionContent sessionStore = sessionStoreService.get(msg.payload().clientIdentifier());
+            Channel previous = sessionStore.getChannel();
+            Boolean cleanSession = sessionStore.isCleanSession();
+            if (cleanSession) {
+                sessionStoreService.removeSession(msg.payload().clientIdentifier());
+                subscribeStoreService.remoteByClient(msg.payload().clientIdentifier());
+                dupPublishMessageService.removeByClientId(msg.payload().clientIdentifier());
+                dupPubRelMessageService.removeByClient(msg.payload().clientIdentifier());
+            }
+            previous.close();
         }
 
         SessionContent sessionContent = new SessionContent(msg.payload().clientIdentifier(), channel, msg.variableHeader().isCleanSession(), null);
@@ -67,6 +95,24 @@ public class ConnectEventHandler implements EventHandler<MqttConnectMessage> {
                 new MqttFixedHeader(MqttMessageType.CONNACK, false, MqttQoS.AT_MOST_ONCE, false, 0),
                 new MqttConnAckVariableHeader(MqttConnectReturnCode.CONNECTION_ACCEPTED, true), null);
         channel.writeAndFlush(okResp);
+
+        // 如果cleanSession为0, 需要重发同一clientId存储的未完成的QoS1和QoS2的DUP消息
+        if (!msg.variableHeader().isCleanSession()) {
+            List<DupPublishMessageContent> dupPublishMessageStoreList = dupPublishMessageService.get(msg.payload().clientIdentifier());
+            List<DupPubRelMessageContent> dupPubRelMessageStoreList = dupPubRelMessageService.get(msg.payload().clientIdentifier());
+            dupPublishMessageStoreList.forEach(dupPublishMessageStore -> {
+                MqttPublishMessage publishMessage = (MqttPublishMessage) MqttMessageFactory.newMessage(
+                        new MqttFixedHeader(MqttMessageType.PUBLISH, true, MqttQoS.valueOf(dupPublishMessageStore.getMqttQoS()), false, 0),
+                        new MqttPublishVariableHeader(dupPublishMessageStore.getTopic(), dupPublishMessageStore.getMessageId()), Unpooled.buffer().writeBytes(dupPublishMessageStore.getMessageBytes()));
+                channel.writeAndFlush(publishMessage);
+            });
+            dupPubRelMessageStoreList.forEach(dupPubRelMessageStore -> {
+                MqttMessage pubRelMessage = MqttMessageFactory.newMessage(
+                        new MqttFixedHeader(MqttMessageType.PUBREL, true, MqttQoS.AT_MOST_ONCE, false, 0),
+                        MqttMessageIdVariableHeader.from(dupPubRelMessageStore.getMessageId()), null);
+                channel.writeAndFlush(pubRelMessage);
+            });
+        }
     }
 
     /**
@@ -82,7 +128,7 @@ public class ConnectEventHandler implements EventHandler<MqttConnectMessage> {
         String password = Objects.isNull(msg.payload().passwordInBytes()) ? null : new String(msg.payload().passwordInBytes(), StandardCharsets.UTF_8);
 
         // clientId是否为空校验
-        if (needAuth && StringUtils.hasText(clientId)) {
+        if (needAuth && !StringUtils.hasText(clientId)) {
             MqttConnAckMessage connAckMessage = (MqttConnAckMessage) MqttMessageFactory.newMessage(
                     new MqttFixedHeader(MqttMessageType.CONNACK, false, MqttQoS.AT_MOST_ONCE, false, 0),
                     new MqttConnAckVariableHeader(MqttConnectReturnCode.CONNECTION_REFUSED_IDENTIFIER_REJECTED, false), null);
